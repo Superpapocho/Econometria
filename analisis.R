@@ -2,13 +2,16 @@
 #Análisis de datos
 #==================================================================================
 
-library(stargazer);library(tidyverse);library(readxl);library(car)
-library(lmtest);library(sandwich)
+library(stargazer);library(tidyverse);library(readxl);library(car);library(dplyr)
+library(lmtest);library(sandwich);library(tables); library(corrplot)
 base<-read_excel("../Econometria/base_limpia.xlsx")
 
-# ******************************************************************
-#Análisis teniendo como controles las variables sociodemográficas
-# ******************************************************************
+# **********************************************************************
+#Estadísticas descriptivas
+# **********************************************************************
+
+#Convertir en factor la variable tratamiento
+base$tratamiento<-as.factor(base$tratamiento) #Categoría base: control
 
 #Convertir en factor las variables categóricas sociodemográficas
 base$sexo<-as.factor(base$sexo) #Categoría base: hombre
@@ -17,34 +20,6 @@ base$nivel_edu<-as.factor(base$nivel_edu)
 base$nivel_edu<-relevel(base$nivel_edu, ref="Primaria") #Categoría base: primaria
 base$edad<-as.factor(base$edad)
 base$edad<-relevel(base$edad, ref="18 - 25 años") #Categoría base: 18-25 años
-base$tratamiento<-as.factor(base$tratamiento) #Categoría base: control
-
-#Regresión con variable independiente únicamente: tratamiento
-reg1<-lm(precision~tratamiento, data=base)
-clas1<-coeftest(reg1)
-rob1<-coeftest(reg1, vcov = vcovHC(reg1, "HC1"))
-stargazer(reg1, type="text", se=list(rob1[,"Std. Error"]))
-
-#Regresión con variables de percepción y tratamiento
-reg2<-lm(precision~tratamiento+num_neutral+num_negativa+num_positiva, data=base) #NO CORRE NUM_POSITIVA
-rob2<-coeftest(reg2, vcov = vcovHC(reg2, "HC1"))
-stargazer(reg2, type="text", se=list(rob2[,"Std. Error"]))
-
-#Interacción entre sexo y tratamiento
-reg3<-lm(precision~tratamiento+sexo+tratamiento:sexo,data=base)
-rob3<-coeftest(reg3, vcov = vcovHC(reg3, "HC1"))
-
-#Regresión con variables: sociodemográficas y tratamiento 
-reg4<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
-        sexo*tratamiento + laboral*tratamiento + tratamiento*nivel_edu +
-        tratamiento*edad, data=base)
-rob4<-coeftest(reg4, vcov = vcovHC(reg4, "HC1"))
-
-stargazer(reg3,reg4,type="text",se=list(rob3[,"Std. Error"], rob4[,"Std. Error"]))
-
-# ******************************************************************
-#Análisis teniendo como controles las variables de política
-# ******************************************************************
 
 #Convertir en factor las variables políticas
 base$elecciones_primera<-as.factor(base$elecciones_primera)
@@ -55,18 +30,85 @@ base$dispuesto_vacunarse<-as.factor(base$dispuesto_vacunarse) #Categoría base: 
 base$perc_vacunas<-as.factor(base$perc_vacunas) #Categoría base:negativa
 base$tipo_vacuna<-as.factor(base$tipo_vacuna) #Categoría base: No
 
-#Regresión con variables de percepción política
-reg5<-lm(precision~tratamiento + espectro_1 + perc_gobierno + perc_vacunacion+
-        dispuesto_vacunarse + perc_vacunas + tipo_vacuna,data=base)
-rob5<-coeftest(reg5,vcov=vcovHC(reg5,"HC1"))
-stargazer(reg5,type="text",se=list(rob5[,"Std. Error"]))
+#Presición, positivas, negativas y neutrales según tratamiento
+est<-tabular(tratamiento~
+                    (precision+num_positiva+num_negativa+num_neutral)*
+                    (mean+sd+min+max)+
+                    (n=1),
+                    data=base)
 
-#Regresión larga con todos los controles
-reg5<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
-     sexo*tratamiento + laboral*tratamiento + tratamiento*nivel_edu +
-     tratamiento*edad+espectro_1 + perc_gobierno + perc_vacunacion+
-     dispuesto_vacunarse + perc_vacunas + tipo_vacuna, data=base)
+# **********************************************************************
+#Análisis teniendo solo la variable de tratamiento
+# **********************************************************************
+
+#Regresión con variable independiente únicamente: tratamiento
+reg1<-lm(precision~tratamiento, data=base)
+clas1<-coeftest(reg1)
+rob1<-coeftest(reg1, vcov = vcovHC(reg1, "HC1"))
+stargazer(reg1, type="text", se=list(rob1[,"Std. Error"]))
+
+# **********************************************************************
+#Análisis teniendo como controles las variables sociodemográficas
+# **********************************************************************
+
+#Regresión con variables independientes de interacción entre sexo y tratamiento
+reg2<-lm(precision~tratamiento+sexo+tratamiento:sexo,data=base)
+rob2<-coeftest(reg2, vcov = vcovHC(reg2, "HC1"))
+
+#Regresión con variables independientes: sociodemográficas y tratamiento 
+reg3<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
+        sexo*tratamiento + laboral*tratamiento + tratamiento*nivel_edu +
+        tratamiento*edad, data=base)     #NO CORREN UNAS VARIABLES
+rob3<-coeftest(reg3, vcov = vcovHC(reg3, "HC1"))
+
+stargazer(reg2,reg3,type="text",se=list(rob2[,"Std. Error"], rob3[,"Std. Error"]))
+
+# **********************************************************************
+#Análisis teniendo como controles las variables de política
+# **********************************************************************
+
+#Regresión con variables de política
+reg4<-lm(precision~tratamiento + tratamiento*espectro_1 + tratamiento*perc_gobierno + 
+         tratamiento*perc_vacunacion + dispuesto_vacunarse + perc_vacunas + 
+         tipo_vacuna,data=base)
+rob4<-coeftest(reg4,vcov=vcovHC(reg4,"HC1"))
+stargazer(reg4,type="text",se=list(rob4[,"Std. Error"]))
+
+# **********************************************************************
+#Análisis teniendo como variables independientes la percepción
+# **********************************************************************
+
+#Regresión con variables independientes: interacción de percepción y tratamiento
+reg5<-lm(precision~ tratamiento*num_positiva + tratamiento*num_negativa, data=base) 
+rob5<-coeftest(reg5, vcov = vcovHC(reg5, "HC1"))
+stargazer(reg5, type="text", se=list(rob5[,"Std. Error"]))
+
+linearHypothesis(reg3,c("tratamiento*num_positiva = 0","tratamiento*num_negativa=0"),test="F",vcov= vcovHC(reg3, "HC1") )
+
+# **********************************************************************
+#Análisis teniendo como variables independientes todas las anteriores
+# **********************************************************************
+
+#Regresión con variables independientes: sociodemográficas y política
+reg6<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
+         sexo*tratamiento + laboral*tratamiento + tratamiento*nivel_edu +
+         tratamiento*edad+ tratamiento*espectro_1 + tratamiento*perc_gobierno + 
+         tratamiento*perc_vacunacion + dispuesto_vacunarse + perc_vacunas + 
+         tipo_vacuna, data=base)
+rob6<-coeftest(reg6,vcov = vcovHC(reg6,"HC1"))
+stargazer(reg6, type="text", se=list(rob6[,"Std. Error"]))
+
+#Regresión con variables independiendientes: sociodemográficas, política y percepeciones
+reg7<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
+                 sexo*tratamiento + laboral*tratamiento + tratamiento*nivel_edu +
+                 tratamiento*edad+ tratamiento*espectro_1 + tratamiento*perc_gobierno + 
+                 tratamiento*perc_vacunacion + dispuesto_vacunarse + perc_vacunas + 
+                 tipo_vacuna + tratamiento* num_neutral + tratamiento*num_negativa +
+                 tratamiento*num_positiva, data=base)
+rob7<-coeftest(reg7,vcov = vcovHC(reg7,"HC1"))
+stargazer(reg7, type="text", se=list(rob7[,"Std. Error"]))
+
+stargazer(reg1,reg2,reg3,reg4,reg5,reg6,reg7,reg8,type="text")
 
 
-#FALTA HACER UNA REGRESIÓN CON LAS INTERACCIONES EN POLÍTICA Y REVISAR TODO
-#FALTA HACER LA TABLA
+#TABLA COEFICIENTES
