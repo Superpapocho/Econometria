@@ -102,7 +102,7 @@ reg6<-lm(precision~tratamiento + sexo + laboral + nivel_edu + edad +
 rob6<-coeftest(reg6,vcov = vcovHC(reg6,"HC1"))
 stargazer(reg6, type="text", se=list(rob6[,"Std. Error"]))
 
-#Todas las regresiones realizadas
+#Mostrar todas las regresiones realizadas
 stargazer(reg1,reg2,reg3,reg4,reg5,reg6,type="text",se=list(rob1[,"Std. Error"],
                                                             rob2[,"Std. Error"],
                                                             rob3[,"Std. Error"],
